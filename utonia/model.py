@@ -103,7 +103,6 @@ class Point3DRoPE(nn.Module):
 
         q_rot = torch.cat(q_outs, dim=-1)
         k_rot = torch.cat(k_outs, dim=-1)
-
         return q_rot, k_rot
 
 
@@ -296,6 +295,8 @@ class SerializedAttention(PointModule):
         qkv = qkv.reshape(-1, 3, H, C // H)
         q, k, v = qkv.unbind(dim=1)
         q, k = self.rope(q, k, rope_coord)
+        self.last_rope_k = k[inverse].reshape(-1, C).detach()
+        self.last_coord  = point.coord.detach()
 
         if not self.enable_flash:
             q = q.reshape(-1, K, H, C // H).permute(0, 2, 1, 3)
@@ -452,7 +453,9 @@ class Block(PointModule):
         shortcut = point.feat
         if self.pre_norm:
             point = self.norm1(point)
-        point = self.drop_path(self.ls1(self.attn(point)))
+        
+        point = self.attn(point)
+        point = self.drop_path(self.ls1(point))
         point.feat = shortcut + point.feat
         if not self.pre_norm:
             point = self.norm1(point)
